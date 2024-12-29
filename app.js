@@ -1,66 +1,78 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
-const { DemoFile } = require('demofile');
+const {parseEvent, parseTicks, parsePlayerInfo} = require('@laihoe/demoparser2');
 
 const app = express();
-const port = 3000;
 
-// Set up view engine and static files
+// Set EJS as the view engine
 app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+// Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Hardcoded path to the demo file for testing
-const demoPath = path.join(__dirname, 'demo', 'example.dem');
+// Path to the demo file
+const demoFilePath = path.join(__dirname, 'demo/example.dem');
 
-app.get('/', (req, res) => {
-    const demoFile = new DemoFile();
-    const playerPositions = {};
+// Home route to display player movements and scoreboard
+app.get('/', async (req, res) => {
+    try {
+        // Extract scoreboard
+        const roundEndEvent = await parseEvent(demoFilePath, 'round_end');
+        const gameEndTick = Math.max(...roundEndEvent.map(x => x.tick));
 
-    demoFile.on('start', () => {
-        demoFile.players.forEach(player => {
-            if (player.teamNumber === 3) { // CT side
-                playerPositions[player.steamId] = {
-                    name: player.name,
-                    positions: { A: 0, B: 0, unknown: 0 },
-                    total: 0
-                };
-            }
-        });
-    });
+        const scoreboardFields = ["kills_total", "deaths_total", "mvps", "headshot_kills_total", "ace_rounds_total", "score"];
+        const scoreboard = await parseTicks(demoFilePath, scoreboardFields, [gameEndTick]);
 
-    demoFile.on('tick', () => {
-        demoFile.players.forEach(player => {
-            if (player.teamNumber === 3 && playerPositions[player.steamId]) {
-                const pos = player.position;
-                if (pos.x > 0) {
-                    playerPositions[player.steamId].positions.A += 1;
-                } else if (pos.x < 0) {
-                    playerPositions[player.steamId].positions.B += 1;
-                } else {
-                    playerPositions[player.steamId].positions.unknown += 1;
+        // Extract player movements for the first round
+        const playerInfo = await parsePlayerInfo(demoFilePath);
+        const ctPlayers = playerInfo.filter(player => player.team_number === 2).map(player => player.name);
+
+        const ticks = await parseTicks(demoFilePath, ["X", "Y", "last_place_name"]);
+        const playerMovements = {};
+
+        ticks.forEach(tick => {
+            if (tick.round === 1 && ctPlayers.includes(tick.name)) {
+                const playerName = tick.name;
+                const position = tick.last_place_name;
+
+                if (!playerMovements[playerName]) {
+                    playerMovements[playerName] = [];
                 }
-                playerPositions[player.steamId].total += 1;
+
+                const timestamp = Math.floor(tick.tick / 1000);
+                if (!playerMovements[playerName][timestamp]) {
+                    playerMovements[playerName][timestamp] = [];
+                }
+                playerMovements[playerName][timestamp].push(position);
             }
         });
-    });
 
-    demoFile.on('end', () => {
-        const playerStats = {};
-        Object.keys(playerPositions).forEach(steamId => {
-            const stats = playerPositions[steamId];
-            playerStats[stats.name] = {
-                A: (stats.positions.A / stats.total) * 100,
-                B: (stats.positions.B / stats.total) * 100,
-            };
-        });
+        const intervals = [];
+        const maxInterval = Math.max(...Object.values(playerMovements).flatMap(m => Object.keys(m).map(Number)));
 
-        res.render('index', { playerStats });
-    });
+        for (let i = 0; i <= maxInterval; i++) {
+            const interval = {time: i, positions: {}};
+            for (const player in playerMovements) {
+                interval.positions[player] = playerMovements[player][i] ? playerMovements[player][i].join(', ') : '';
+            }
+            intervals.push(interval);
+        }
 
-    demoFile.parse(fs.readFileSync(demoPath));
+        res.render('index', {intervals, scoreboard});
+    } catch (error) {
+        console.error('Error processing demo file:', error);
+        res.status(500).send('Error processing demo file.');
+    }
 });
 
-app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
+// Handle 404 errors
+app.use((req, res) => {
+    res.status(404).send('Page Not Found');
+});
+
+// Start the server
+const PORT = 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
 });

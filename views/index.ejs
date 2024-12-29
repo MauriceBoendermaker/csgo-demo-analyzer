@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS:GO Demo Analysis</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <h1>CS:GO Demo Analysis</h1>
+
+    <h2>Player Movements in First Round</h2>
+    <% if (intervals && intervals.length > 0) { %>
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>Time (seconds)</th>
+                    <% for (const player in intervals[0].positions) { %>
+                        <th><%= player %></th>
+                    <% } %>
+                </tr>
+            </thead>
+            <tbody>
+                <% intervals.forEach(interval => { %>
+                    <tr>
+                        <td><%= interval.time %></td>
+                        <% for (const player in interval.positions) { %>
+                            <td><%= interval.positions[player] %></td>
+                        <% } %>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    <% } else { %>
+        <p>No data available.</p>
+    <% } %>
+
+    <h2>Scoreboard</h2>
+    <% if (scoreboard && scoreboard.length > 0) { %>
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Kills</th>
+                    <th>Deaths</th>
+                    <th>MVPS</th>
+                    <th>Headshot Kills</th>
+                    <th>ACE Rounds</th>
+                    <th>Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% scoreboard.forEach(entry => { %>
+                    <tr>
+                        <td><%= entry.name %></td>
+                        <td><%= entry.kills_total %></td>
+                        <td><%= entry.deaths_total %></td>
+                        <td><%= entry.mvps %></td>
+                        <td><%= entry.headshot_kills_total %></td>
+                        <td><%= entry.ace_rounds_total %></td>
+                        <td><%= entry.score %></td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    <% } else { %>
+        <p>No scoreboard data available.</p>
+    <% } %>
+</body>
+</html>
